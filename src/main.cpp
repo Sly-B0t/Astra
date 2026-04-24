@@ -1,6 +1,17 @@
 #include <Bluepad32.h>
 #include <Arduino.h>
 ControllerPtr controller;
+struct InputStruct
+{
+    float throttle; //  between -1 -> 1 controlleed by R2 and L2
+    float yaw;      // controlled by the Y of the left stick -1->1
+    float pitch;    // controlled by the X of the left stick -1->1
+    float roll;     // controlled by R1 and L1 so it has discrete values, -1,0,1,
+};
+
+float rollspeed = 1;
+InputStruct newPilotInput; // THIS GETS SET BY THE CONTROLLER TASK
+InputStruct PilotInput;    // THIS ONLY GETS CHANGED BY THE TASK THAT USES IT SO THE DATA NEVER CHANGES MID TASK
 
 // This callback gets called any time a new gamepad is connected.
 // Up to 4 gamepads can be connected at the same time.
@@ -107,27 +118,38 @@ void processGamepad(ControllerPtr ctl)
     dumpGamepad(ctl);
 }
 
-// Arduino setup function. Runs in CPU 1
-void setup()
-{
-    Serial.begin(115200);
-    Serial.printf("Firmware: %s\n", BP32.firmwareVersion());
-    const uint8_t *addr = BP32.localBdAddress();
-    Serial.printf("BD Addr: %2X:%2X:%2X:%2X:%2X:%2X\n", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
-    BP32.setup(&onConnectedController, &onDisconnectedController);
-    BP32.forgetBluetoothKeys();
-}
-
+// gets controller input and adds it to a queue
 void controllerInput(void *pvParameters)
 {
-}
+    while (true)
+    {
+        BP32.update();
 
+        if (controller && controller->isConnected())
+        {
+            newPilotInput = (InputStruct){
+                (controller->throttle() - controller->brake()) / 1023.0f,
+                controller->axisY() / 512.0f,
+                controller->axisX() / 512.0f,
+                (float)(controller->r1() - controller->l1())};
+        }
+
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+}
+// gets IMU input calculates PID and sets motor PWM
 void control(void *pvParameters)
 {
+    while (true)
+    {
+    }
 }
-
+// debug, maybe log data or make a web page
 void telemetry(void *pvParameters)
 {
+    while (true)
+    {
+    }
 }
 
 void setup()
@@ -135,7 +157,7 @@ void setup()
     Serial.begin(115200);
 
     xTaskCreate(
-        controllerTask,     // function
+        controllerInput,    // function
         "Controller Input", // task name
         4096,               // stack size
         NULL,               // parameter
@@ -144,7 +166,7 @@ void setup()
     );
 
     xTaskCreate(
-        motorTask,
+        control,
         "Control",
         4096,
         NULL,
@@ -155,25 +177,18 @@ void setup()
         "Telemetry",
         4096,
         NULL,
-        1,
+        3,
         NULL);
+
+    Serial.begin(115200);
+    Serial.printf("Firmware: %s\n", BP32.firmwareVersion());
+    const uint8_t *addr = BP32.localBdAddress();
+    Serial.printf("BD Addr: %2X:%2X:%2X:%2X:%2X:%2X\n", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
+    BP32.setup(&onConnectedController, &onDisconnectedController);
+    BP32.forgetBluetoothKeys();
 }
 
 // Arduino loop function. Runs in CPU 1.
 void loop()
 {
-    // This call fetches all the controllers' data.
-    // Call this function in your main loop.
-    bool dataUpdated = BP32.update();
-    if (dataUpdated)
-        processGamepad(controller);
-
-    // The main loop must have some kind of "yield to lower priority task" event.
-    // Otherwise, the watchdog will get triggered.
-    // If your main loop doesn't have one, just add a simple `vTaskDelay(1)`.
-    // Detailed info here:
-    // https://stackoverflow.com/questions/66278271/task-watchdog-got-triggered-the-tasks-did-not-reset-the-watchdog-in-time
-
-    //     vTaskDelay(1);
-    delay(1500);
 }
