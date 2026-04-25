@@ -13,6 +13,9 @@
 #define MOTOR4PIN 33
 #define BATTERYADCINPUT 32
 #define MPU_ADDR 0x68
+#define DEADZONE .1 // analog sticks are -1->1 so keep -.1 -> .1 as nothing so no drift
+
+float yawrate = 1.5;
 
 MPU6050 mpu;
 
@@ -81,6 +84,7 @@ struct PID
 
 PID rollPID(6.0, 0.0, 0.2);
 PID pitchPID(6.0, 0.0, 0.2);
+PID yawPID(4.0, 0.0, 0.1);
 
 Vector Accelerometer;
 Vector Gyroscope;
@@ -138,6 +142,24 @@ void setupIMU()
         while (true)
             ; // infinite loop can't really do anything without the mpu
     }
+    long gz_sum = 0;
+    int16_t ax, ay, az;
+    int16_t gx, gy, gz;
+
+    const int samples = 1000;
+
+    delay(2000);
+
+    for (int i = 0; i < samples; i++)
+    {
+        mpu.getMotion6(&ax, &ay, &az, &gx, &gy, &gz);
+        gz_sum += gz;
+        delay(2);
+    }
+
+    int gz_offset = gz_sum / samples;
+
+    mpu.setZGyroOffset(-gz_offset);
 }
 void setup()
 {
@@ -160,15 +182,18 @@ void controllerInput(void *pvParameters)
         {
             newPilotInput = (InputStruct){
                 (controller->throttle() - controller->brake()) / 1023.0f,
-                controller->axisY() / 512.0f,
+                (float)(controller->r1() - controller->l1()),
                 controller->axisX() / 512.0f,
-                (float)(controller->r1() - controller->l1())};
+                controller->axisY() / 512.0f};
         }
         GoalPosition.throttle = clamp(newPilotInput.throttle + GoalPosition.throttle);
         // angles are  from -1->1 so multiply it by pi to get -pi -> pi
-        GoalPosition.pitch = newPilotInput.pitch * PI / 6;
-        GoalPosition.yaw += newPilotInput.yaw * PI;
-        GoalPosition.roll = newPilotInput.roll * PI / 6;
+        float pitchInput = (abs(newPilotInput.pitch) > DEADZONE) ? newPilotInput.pitch : 0;
+        float rollInput = (abs(newPilotInput.roll) > DEADZONE) ? newPilotInput.roll : 0;
+
+        GoalPosition.pitch = pitchInput * PI / 6;
+        GoalPosition.roll = rollInput * PI / 6;
+        GoalPosition.yaw += newPilotInput.yaw * yawrate * 0.01f;
 
         vTaskDelay(10 / portTICK_PERIOD_MS);
     }
@@ -176,9 +201,8 @@ void controllerInput(void *pvParameters)
 // gets IMU input calculates PID and sets motor PWM
 void control(void *pvParameters)
 {
-    float pitch = 0, roll = 0;
+    float pitch = 0, roll = 0, yaw = 0;
     unsigned long lastTime = millis();
-
     while (true)
     {
         mpu.getMotion6(&Accelerometer.x, &Accelerometer.y, &Accelerometer.z,
@@ -196,7 +220,7 @@ void control(void *pvParameters)
 
         float gx = (Gyroscope.x / 131.0) * PI / 180.0;
         float gy = (Gyroscope.y / 131.0) * PI / 180.0;
-
+        float gz = (Gyroscope.z / 131.0) * PI / 180.0;
         // accel angles
         float pitch_acc = atan2(ay, az);
         float roll_acc = atan2(-ax, sqrt(ay * ay + az * az));
@@ -205,6 +229,7 @@ void control(void *pvParameters)
         float alpha = 0.98;
         pitch = alpha * (pitch + gx * dt) + (1 - alpha) * pitch_acc;
         roll = alpha * (roll + gy * dt) + (1 - alpha) * roll_acc;
+        yaw += gz * dt;
 
         // debug
         Serial.print("Pitch: ");
@@ -212,15 +237,16 @@ void control(void *pvParameters)
         Serial.print(" Roll: ");
         Serial.println(roll);
 
-        float throttle = 1000 + (GoalPosition.throttle + 1.0f) * 500.0f;
+        float throttle = (deadBattery) ? 1000 : 1000 + (GoalPosition.throttle + 1.0f) * 500.0f;
         throttle = constrain(throttle, 1000, 2000);
         float rollCorrection = rollPID.update(GoalPosition.roll, roll, dt);
         float pitchCorrection = pitchPID.update(GoalPosition.pitch, pitch, dt);
+        float yawCorrection = yawPID.update(GoalPosition.yaw, yaw, dt);
 
-        int m1 = throttle + pitchCorrection - rollCorrection; // front-left
-        int m2 = throttle + pitchCorrection + rollCorrection; // front-right
-        int m3 = throttle - pitchCorrection - rollCorrection; // back-left
-        int m4 = throttle - pitchCorrection + rollCorrection; // back-right
+        int m1 = throttle + pitchCorrection - rollCorrection + yawCorrection;
+        int m2 = throttle + pitchCorrection + rollCorrection - yawCorrection;
+        int m3 = throttle - pitchCorrection - rollCorrection - yawCorrection;
+        int m4 = throttle - pitchCorrection + rollCorrection + yawCorrection;
 
         m1 = constrain(m1, 1000, 2000);
         m2 = constrain(m2, 1000, 2000);
