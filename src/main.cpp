@@ -14,6 +14,8 @@
 #define BATTERYADCINPUT 32
 #define MPU_ADDR 0x68
 
+MPU6050 mpu;
+
 float batteryVoltage = 12.0; // makes sure its over 9V so we dont die immediatly
 bool deadBattery = false;
 ControllerPtr controller;
@@ -38,9 +40,9 @@ struct Position
 
 struct Vector
 {
-    float x;
-    float y;
-    float z;
+    int16_t x;
+    int16_t y;
+    int16_t z;
 };
 
 Vector Accelerometer;
@@ -52,6 +54,132 @@ InputStruct PilotInput;    // THIS ONLY GETS CHANGED BY THE TASK THAT USES IT SO
 
 Position CurrentPosition; // should get updated by the IMU
 Position GoalPosition;    // should get updated by the controller
+
+// function
+// task name
+// stack size
+// parameter
+// priority
+// task handle
+void setupTasks()
+{
+    xTaskCreate(controllerInput, "Controller Input", 4096, NULL, 2, NULL);
+    xTaskCreate(control, "Control", 4096, NULL, 1, NULL);
+    xTaskCreate(telemetry, "Telemetry", 4096, NULL, 3, NULL);
+}
+void setupGamePad()
+{
+    Serial.printf("Firmware: %s\n", BP32.firmwareVersion());
+    const uint8_t *addr = BP32.localBdAddress();
+    Serial.printf("BD Addr: %2X:%2X:%2X:%2X:%2X:%2X\n", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
+    BP32.setup(&onConnectedController, &onDisconnectedController);
+    BP32.forgetBluetoothKeys();
+}
+void setupIMU()
+{
+    mpu.initialize();
+    if (mpu.testConnection())
+    {
+        Serial.println("IMU Connected Successfully!");
+    }
+    else
+    {
+        Serial.println("IMU Connection Failed!");
+        while (true)
+            ; // infinite loop can't really do anything without the mpu
+    }
+}
+void setup()
+{
+    Serial.begin(115200);
+    Wire.begin(21, 22);
+    setupGamePad();
+    setupTasks();
+}
+
+// gets controller input and adds it to a queue
+void controllerInput(void *pvParameters)
+{
+    while (true)
+    {
+        BP32.update();
+
+        if (controller && controller->isConnected())
+        {
+            newPilotInput = (InputStruct){
+                (controller->throttle() - controller->brake()) / 1023.0f,
+                controller->axisY() / 512.0f,
+                controller->axisX() / 512.0f,
+                (float)(controller->r1() - controller->l1())};
+        }
+        GoalPosition.throttle = clamp(newPilotInput.throttle + GoalPosition.throttle);
+        GoalPosition.pitch +=
+
+            vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+}
+// gets IMU input calculates PID and sets motor PWM
+void control(void *pvParameters)
+{
+    float pitch = 0, roll = 0;
+    unsigned long lastTime = millis();
+
+    while (true)
+    {
+        mpu.getMotion6(&Accelerometer.x, &Accelerometer.y, &Accelerometer.z,
+                       &Gyroscope.x, &Gyroscope.y, &Gyroscope.z);
+
+        // timing
+        unsigned long now = millis();
+        float dt = (now - lastTime) / 1000.0;
+        lastTime = now;
+
+        // scale
+        float ax = Accelerometer.x / 16384.0;
+        float ay = Accelerometer.y / 16384.0;
+        float az = Accelerometer.z / 16384.0;
+
+        float gx = Gyroscope.x / 131.0;
+        float gy = Gyroscope.y / 131.0;
+
+        // accel angles
+        float pitch_acc = atan2(ay, az) * 180.0 / PI;
+        float roll_acc = atan2(-ax, sqrt(ay * ay + az * az)) * 180.0 / PI;
+
+        // complementary filter
+        float alpha = 0.98;
+        pitch = alpha * (pitch + gx * dt) + (1 - alpha) * pitch_acc;
+        roll = alpha * (roll + gy * dt) + (1 - alpha) * roll_acc;
+
+        // debug
+        Serial.print("Pitch: ");
+        Serial.print(pitch);
+        Serial.print(" Roll: ");
+        Serial.println(roll);
+
+        vTaskDelay(pdMS_TO_TICKS(10)); // ~100 Hz
+    }
+}
+// debug, maybe log data or make a web page
+void telemetry(void *pvParameters)
+{
+    while (true)
+    {
+        uint32_t mv = analogReadMilliVolts(32);
+
+        batteryVoltage = (mv / 1000.0) * 4.0;
+        if (batteryVoltage <= 9.0)
+        {
+            deadBattery = true;
+        }
+    }
+}
+
+// Arduino loop function. Runs in CPU 1.
+void loop()
+{
+}
+
 // This callback gets called any time a new gamepad is connected.
 // Up to 4 gamepads can be connected at the same time.
 void onConnectedController(ControllerPtr ctl)
@@ -164,88 +292,4 @@ float clamp(float x)
     if (x < -1.0)
         return -1.0;
     return x;
-}
-
-// gets controller input and adds it to a queue
-void controllerInput(void *pvParameters)
-{
-    while (true)
-    {
-        BP32.update();
-
-        if (controller && controller->isConnected())
-        {
-            newPilotInput = (InputStruct){
-                (controller->throttle() - controller->brake()) / 1023.0f,
-                controller->axisY() / 512.0f,
-                controller->axisX() / 512.0f,
-                (float)(controller->r1() - controller->l1())};
-        }
-        GoalPosition.throttle = clamp(newPilotInput.throttle + GoalPosition.throttle);
-        GoalPosition.pitch +=
-
-            vTaskDelay(10 / portTICK_PERIOD_MS);
-    }
-}
-// gets IMU input calculates PID and sets motor PWM
-void control(void *pvParameters)
-{
-    while (true)
-    {
-    }
-}
-// debug, maybe log data or make a web page
-void telemetry(void *pvParameters)
-{
-    while (true)
-    {
-        uint32_t mv = analogReadMilliVolts(32);
-
-        batteryVoltage = (mv / 1000.0) * 4.0;
-        if (batteryVoltage <= 9.0)
-        {
-            deadBattery = true;
-        }
-    }
-}
-
-// function
-// task name
-// stack size
-// parameter
-// priority
-// task handle
-void setupTasks()
-{
-    xTaskCreate(controllerInput, "Controller Input", 4096, NULL, 2, NULL);
-    xTaskCreate(control, "Control", 4096, NULL, 1, NULL);
-    xTaskCreate(telemetry, "Telemetry", 4096, NULL, 3, NULL);
-}
-void setupGamePad()
-{
-    Serial.printf("Firmware: %s\n", BP32.firmwareVersion());
-    const uint8_t *addr = BP32.localBdAddress();
-    Serial.printf("BD Addr: %2X:%2X:%2X:%2X:%2X:%2X\n", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
-    BP32.setup(&onConnectedController, &onDisconnectedController);
-    BP32.forgetBluetoothKeys();
-}
-
-void setupIMU()
-{
-    Wire.beginTransmission(MPU_ADDR);
-    Wire.write(0x6B);
-    Wire.write(0);
-    Wire.endTransmission();
-}
-void setup()
-{
-    Serial.begin(115200);
-    Wire.begin(21, 22);
-    setupGamePad();
-    setupTasks();
-}
-
-// Arduino loop function. Runs in CPU 1.
-void loop()
-{
 }
