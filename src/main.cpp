@@ -45,6 +45,43 @@ struct Vector
     int16_t z;
 };
 
+struct PID
+{
+    float Kp, Ki, Kd;
+    float integral = 0;
+    float lastError = 0;
+
+    PID::PID(float p, float i, float d)
+    {
+        Kp = p;
+        Ki = i;
+        Kd = d;
+    }
+
+    float update(float target, float current, float dt)
+    {
+        float error = target - current;
+
+        integral += error * dt;
+
+        float derivative = (error - lastError) / dt;
+        lastError = error;
+
+        float output = Kp * error + Ki * integral + Kd * derivative;
+
+        // limit correction strength
+        if (output > 300)
+            output = 300;
+        if (output < -300)
+            output = -300;
+
+        return output;
+    }
+};
+
+PID rollPID(6.0, 0.0, 0.2);
+PID pitchPID(6.0, 0.0, 0.2);
+
 Vector Accelerometer;
 Vector Gyroscope;
 
@@ -54,7 +91,20 @@ InputStruct PilotInput;    // THIS ONLY GETS CHANGED BY THE TASK THAT USES IT SO
 
 Position CurrentPosition; // should get updated by the IMU
 Position GoalPosition;    // should get updated by the controller
+Servo motor1, motor2, motor3, motor4;
 
+void setupMotors()
+{
+    motor1.attach(MOTOR1PIN, 1000, 2000);
+    motor2.attach(MOTOR2PIN, 1000, 2000);
+    motor3.attach(MOTOR3PIN, 1000, 2000);
+    motor4.attach(MOTOR4PIN, 1000, 2000);
+
+    motor1.writeMicroseconds(1000);
+    motor2.writeMicroseconds(1000);
+    motor3.writeMicroseconds(1000);
+    motor4.writeMicroseconds(1000);
+}
 // function
 // task name
 // stack size
@@ -95,6 +145,8 @@ void setup()
     Wire.begin(21, 22);
     setupGamePad();
     setupTasks();
+    setupIMU();
+    setupMotors();
 }
 
 // gets controller input and adds it to a queue
@@ -113,9 +165,12 @@ void controllerInput(void *pvParameters)
                 (float)(controller->r1() - controller->l1())};
         }
         GoalPosition.throttle = clamp(newPilotInput.throttle + GoalPosition.throttle);
-        GoalPosition.pitch +=
+        // angles are  from -1->1 so multiply it by pi to get -pi -> pi
+        GoalPosition.pitch = newPilotInput.pitch * PI / 6;
+        GoalPosition.yaw += newPilotInput.yaw * PI;
+        GoalPosition.roll = newPilotInput.roll * PI / 6;
 
-            vTaskDelay(10 / portTICK_PERIOD_MS);
+        vTaskDelay(10 / portTICK_PERIOD_MS);
     }
 }
 // gets IMU input calculates PID and sets motor PWM
@@ -139,12 +194,12 @@ void control(void *pvParameters)
         float ay = Accelerometer.y / 16384.0;
         float az = Accelerometer.z / 16384.0;
 
-        float gx = Gyroscope.x / 131.0;
-        float gy = Gyroscope.y / 131.0;
+        float gx = (Gyroscope.x / 131.0) * PI / 180.0;
+        float gy = (Gyroscope.y / 131.0) * PI / 180.0;
 
         // accel angles
-        float pitch_acc = atan2(ay, az) * 180.0 / PI;
-        float roll_acc = atan2(-ax, sqrt(ay * ay + az * az)) * 180.0 / PI;
+        float pitch_acc = atan2(ay, az);
+        float roll_acc = atan2(-ax, sqrt(ay * ay + az * az));
 
         // complementary filter
         float alpha = 0.98;
@@ -156,6 +211,26 @@ void control(void *pvParameters)
         Serial.print(pitch);
         Serial.print(" Roll: ");
         Serial.println(roll);
+
+        float throttle = 1000 + (GoalPosition.throttle + 1.0f) * 500.0f;
+        throttle = constrain(throttle, 1000, 2000);
+        float rollCorrection = rollPID.update(GoalPosition.roll, roll, dt);
+        float pitchCorrection = pitchPID.update(GoalPosition.pitch, pitch, dt);
+
+        int m1 = throttle + pitchCorrection - rollCorrection; // front-left
+        int m2 = throttle + pitchCorrection + rollCorrection; // front-right
+        int m3 = throttle - pitchCorrection - rollCorrection; // back-left
+        int m4 = throttle - pitchCorrection + rollCorrection; // back-right
+
+        m1 = constrain(m1, 1000, 2000);
+        m2 = constrain(m2, 1000, 2000);
+        m3 = constrain(m3, 1000, 2000);
+        m4 = constrain(m4, 1000, 2000);
+
+        motor1.writeMicroseconds(m1);
+        motor2.writeMicroseconds(m2);
+        motor3.writeMicroseconds(m3);
+        motor4.writeMicroseconds(m4);
 
         vTaskDelay(pdMS_TO_TICKS(10)); // ~100 Hz
     }
