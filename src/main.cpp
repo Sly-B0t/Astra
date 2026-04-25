@@ -232,7 +232,7 @@ void control(void *pvParameters)
         motor3.writeMicroseconds(m3);
         motor4.writeMicroseconds(m4);
 
-        vTaskDelay(pdMS_TO_TICKS(10)); // ~100 Hz
+        vTaskDelay(pdMS_TO_TICKS(5)); // ~100 Hz
     }
 }
 // debug, maybe log data or make a web page
