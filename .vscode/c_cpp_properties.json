@@ -10,6 +10,7 @@
             "includePath": [
                 "C:/Users/Muhiedin/Documents/PlatformIO/Projects/Astra/include",
                 "C:/Users/Muhiedin/Documents/PlatformIO/Projects/Astra/src",
+                "C:/Users/Muhiedin/Documents/PlatformIO/Projects/Astra/.pio/libdeps/esp32dev/MPU9250",
                 "C:/Users/Muhiedin/Documents/PlatformIO/Projects/Astra/.pio/libdeps/esp32dev/MPU6050/src",
                 "C:/Users/Muhiedin/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src",
                 "C:/Users/Muhiedin/Documents/PlatformIO/Projects/Astra/.pio/libdeps/esp32dev/ESP32Servo/src",
@@ -256,6 +257,7 @@
                 "path": [
                     "C:/Users/Muhiedin/Documents/PlatformIO/Projects/Astra/include",
                     "C:/Users/Muhiedin/Documents/PlatformIO/Projects/Astra/src",
+                    "C:/Users/Muhiedin/Documents/PlatformIO/Projects/Astra/.pio/libdeps/esp32dev/MPU9250",
                     "C:/Users/Muhiedin/Documents/PlatformIO/Projects/Astra/.pio/libdeps/esp32dev/MPU6050/src",
                     "C:/Users/Muhiedin/.platformio/packages/framework-arduinoespressif32/libraries/Wire/src",
                     "C:/Users/Muhiedin/Documents/PlatformIO/Projects/Astra/.pio/libdeps/esp32dev/ESP32Servo/src",
