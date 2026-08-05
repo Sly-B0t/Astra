@@ -1,75 +1,46 @@
-#include <Arduino.h>
-
-#define DEADZONE 0.10f
-
-#define ESC_MIN_US 1000
-#define ESC_MAX_US 2000
-
-#define MAX_ANGLE_RAD (PI / 6.0f) // 30 degrees
-#define MAX_PID_CORRECTION 250    // max PID correction in microseconds
-
-#define ENABLE_BATTERY_CUTOFF 0
-#define BATTERY_CUTOFF_VOLTAGE 9.0f
-
-#define BATTERY_FULL_VOLTAGE 12.6f
-#define BATTERY_EMPTY_VOLTAGE 9.0f
-
-#define SDA_PIN 21
-#define SCL_PIN 22
-
-#define MOTOR1PIN 25
-#define MOTOR2PIN 26
-#define MOTOR3PIN 27
-#define MOTOR4PIN 33
-
-// CHANGE THIS TO GET CORRECT MOTOR ORIENTATION
-#define MOTORFR MOTOR1PIN
-#define MOTORFL MOTOR2PIN
-#define MOTORBR MOTOR3PIN
-#define MOTORBL MOTOR4PIN
-
-#define ROLL_CORRECTION_STRENGTH 300
-#define PITCH_CORRECTION_STRENGTH 300
-#define YAW_CORRECTION_STRENGTH 300
-
-#define BATTERYADCINPUT 32
-
-#define PROPORTIONAL 1
-#define INTEGRAL 1
-#define DERIVITAVE 1
-
-struct Motors
+struct ICM
 {
-    float m1;
-    float m2;
-    float m3;
-    float m4;
+    float gx, gy, gz;
+    float ay, ax, az;
+    float mx, my, mz;
+    float temp;
 };
 
-struct GoalStruct
+struct Orientation
 {
-    float throttle; // 0 -> 1
-    float yaw;      // radians
-    float pitch;    // radians
-    float roll;     // radians
+    float yaw, roll, pitch;
+    float altitude;
 };
 
-struct Attitude
+struct Control
 {
-    float pitch; // radians
-    float roll;  // radians
-    float yaw;   // radians
+    // TODO
 };
 
-struct InputStruct
-{
-    float throttle; // 0 -> 1
-    float yaw;      // -1 -> 1
-    float pitch;    // -1 -> 1
-    float roll;     // -1 -> 1
-};
+// IO Pins
+#define SERIALCLOCKPIN 9
+#define SERIALDATAPIN 8
 
-void writeAllMotors(int us);
-float batteryPercentFromVoltage(float voltage);
-void calibrateIMULevel();
-void scanI2C();
+#define MOTOR1PIN 11
+#define MOTOR2PIN 12
+#define MOTOR3PIN 13
+#define MOTOR4PIN 14
+#define BATTERYADCINPUT 10
+#define BAR_ADDR 0x5D
+#define MPU_ADDR 0x68
+#define LED_18 18
+
+#define LPS_ERROR 1
+#define IMU_ERROR 2
+#define I2C_ERROR 3
+
+/*
+
+
+*/
+void callError(int code)
+{
+    while (1)
+    {
+    }
+}

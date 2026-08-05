@@ -26,7 +26,7 @@ The ESP32 interfaces with any Bluepad32-compatible controller. Ensure your contr
 * 4× BLDC Motors (1000KV)
 * 4× ESCs (30A)
 * 3S LiPo Battery
-* IMU (MPU6050)
+* IMU (ICM-20948)
 * Custom PCB *(in progress)*
 * Frame (DJI F450-style)
 
