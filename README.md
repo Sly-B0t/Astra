@@ -1,46 +1,28 @@
-# 🚁 Astra-1 Drone
+# Astra Revision 5.5
 
-A custom-built quadcopter powered by an ESP32, designed for real-time control, stabilization, and modular expansion.
-This project focuses on embedded systems, control systems (PID), and full hardware–software integration.
+Flightcontroller firmware for a custom ESP32S3-N8R8 embedded board, ICM-20948, LPS25HBTR. PCB Gerber files are also within this repo and are easily reproducable.
 
-PCB design files and 3D-printable frame components are planned for future revisions.
+# Hardware
 
-The ESP32 interfaces with any Bluepad32-compatible controller. Ensure your controller is paired before use.
-
----
-
-## 📌 Features
-
-* ESP32-based flight controller
-* PWM control of BLDC motors via ESCs
-* PS5 controller input over Bluetooth
-* Real-time task management using FreeRTOS
-* Modular and scalable architecture
-* Planned PID-based stabilization (pitch, roll, yaw)
+* ESP32-S3 Module
+* LDO
+* GPIO18 LED
+* ICM-20948 Gyro, Magnetometer, and Accelerometer
+* LPS25HBTR Barometer
+* Fully Custom PCB
+* Couple Resistors, Capacitors, Buttons and 2.54mm Pin Headers
+* Usb-C 2.0 Port
 
 ---
 
-## 🛠️ Hardware
+# Software
 
-* ESP32 DOIT Dev Board
-* 4× BLDC Motors (1000KV)
-* 4× ESCs (30A)
-* 3S LiPo Battery
-* IMU (ICM-20948)
-* Custom PCB *(in progress)*
-* Frame (DJI F450-style)
-
----
-
-## 💻 Software
-
-* C/C++ (ESP-IDF or Arduino framework)
-* FreeRTOS (ESP32 built-in)
+* C++
+* FreeRTOS 
 * PlatformIO + Visual Studio Code
 
----
 
-## 📂 Project Structure
+# Project Structure
 
 ```bash
 .
@@ -49,12 +31,23 @@ The ESP32 interfaces with any Bluepad32-compatible controller. Ensure your contr
 ├── lib/            # Custom libraries/modules
 ├── test/           # Unit tests (optional)
 ├── platformio.ini  # Build configuration
-└── README.md
+├── README.md
+└── Gerber.zip      # Gerber files for PCB production
 ```
 
 ---
 
-## 🚀 Getting Started
+# Controls
+
+* L2 / R2 (analog triggers) → Throttle
+* Left Stick → Pitch
+* R1/L1 Yaw
+* A -> Arm Motors
+* B -> Disarm Motors
+
+---
+
+# Getting Started
 
 ### 1. Clone the repository
 
@@ -69,7 +62,7 @@ cd astra-1
 pio run
 ```
 
-### 3. Upload to ESP32
+### 3. Upload to ESP32-S3-N8R8
 
 ```bash
 pio run --target upload
@@ -78,42 +71,10 @@ pio run --target upload
 ### 4. Pair controller
 
 * Power on your controller
-* Pair via Bluetooth (handled by Bluepad32)
+* Pair via Bluetooth 
 * Ensure connection before arming motors
 
 ---
 
-## 🎮 Controls
 
-* L2 / R2 (analog triggers) → Throttle
-* Left Stick → Pitch / Yaw
-* L1 / R1 → Roll
 
----
-
-## ⚙️ Future Improvements
-
-* Full PID tuning for stable flight
-* Sensor fusion (Kalman / Complementary filter)
-* GPS integration
-* Real-time telemetry dashboard (web interface)
-* Live PID tuning over WiFi
-
----
-
-## ⚠️ Disclaimer
-
-This project involves high-speed motors and LiPo batteries.
-Improper use can cause serious damage or injury. Test carefully and implement safety precautions.
-
----
-
-## 📸 Media
-
-Will be added later
-
----
-
-## 👤 Author
-
-Muhiedin Omar
