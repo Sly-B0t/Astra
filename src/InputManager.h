@@ -5,12 +5,24 @@
 #include <Wire.h>
 #include <Bluepad32.h>
 #include <Helpers.h>
+#include <ESP32Servo.h>
+
 class InputManager
 {
 private:
     static LPS ps;
     static Adafruit_ICM20948 icm;
     static ControllerPtr controller;
+    ICM icm_struct;
+    Orientation orientation;
+    unsigned long previousFusionTime = 0;
+    float gyroXOffset = 0.0f;
+    float gyroYOffset = 0.0f;
+    float gyroZOffset = 0.0f;
+    Servo m1;
+    Servo m2;
+    Servo m3;
+    Servo m4;
 
 public:
     InputManager();
@@ -20,12 +32,13 @@ public:
     void dumpGamepad(ControllerPtr ctl);
     void processGamepad(ControllerPtr ctl);
     float getAltitude();
-    float getTemperature();
+    float getAverageTemperature();
     float getTemperatureBar();
     float getTemperatureICM();
     Control getController();
     Orientation getOrientation();
-    Orientation sensorFusion(ICM icm);
-    void setMotor(float speed, int motor);
-    void setMotors(float m1, float m2, float m3, float m4);
+    Orientation sensorFusion();
+    void setMotor(float speed, Servo motor);
+    void setMotors(Motors motors);
+    void updateICM();
 };

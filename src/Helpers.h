@@ -14,7 +14,13 @@ struct Orientation
 
 struct Control
 {
-    // TODO
+    int a, b, r1, l1; // X, Circle, R1, and L1
+    float r2, l2;     // R2 and L2
+    float ry;         // Right analog stick Y only
+    // r1 and l1 for yaw
+    // r2 and l2 for altitude
+    // ry for angling down or up
+    // x and circle for arming and disarming
 };
 
 // IO Pins
@@ -44,3 +50,8 @@ void callError(int code)
     {
     }
 }
+
+struct Motors
+{
+    float m1, m2, m3, m4;
+};
