@@ -1,3 +1,5 @@
+#pragma once
+
 #include <LPS.h>
 #include <Adafruit_ICM20X.h>
 #include <Adafruit_ICM20948.h>
@@ -13,8 +15,8 @@ private:
     static LPS ps;
     static Adafruit_ICM20948 icm;
     static ControllerPtr controller;
-    ICM icm_struct;
-    Orientation orientation;
+    ICM icm_struct = {};
+    Orientation orientation = {};
     unsigned long previousFusionTime = 0;
     float gyroXOffset = 0.0f;
     float gyroYOffset = 0.0f;
@@ -31,6 +33,8 @@ public:
     static void onDisconnectedController(ControllerPtr ctl);
     void dumpGamepad(ControllerPtr ctl);
     void processGamepad(ControllerPtr ctl);
+    void updateControllers();
+    bool isControllerConnected() const;
     float getAltitude();
     float getAverageTemperature();
     float getTemperatureBar();
@@ -41,4 +45,5 @@ public:
     void setMotor(float speed, Servo motor);
     void setMotors(Motors motors);
     void updateICM();
+    Orientation getGoal();
 };

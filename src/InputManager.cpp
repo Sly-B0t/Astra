@@ -9,24 +9,76 @@
 #include <Helpers.h>
 #include <ESP32Servo.h>
 
+LPS InputManager::ps;
+Adafruit_ICM20948 InputManager::icm;
+ControllerPtr InputManager::controller = nullptr;
+
+namespace
+{
+void scanI2CBus()
+{
+    Serial.println("I2C scan: starting.");
+    int found = 0;
+    for (uint8_t address = 1; address < 127; address++)
+    {
+        Wire.beginTransmission(address);
+        if (Wire.endTransmission() == 0)
+        {
+            Serial.printf("I2C scan: found device at 0x%02X\n", address);
+            found++;
+        }
+        delay(2);
+    }
+    Serial.printf("I2C scan: complete, found %d device(s).\n", found);
+}
+}
+
 InputManager::InputManager()
 {
+    Serial.println("InputManager: begin.");
     Serial.printf("Firmware: %s\n", BP32.firmwareVersion());
     const uint8_t *addr = BP32.localBdAddress();
     Serial.printf("BD Addr: %2X:%2X:%2X:%2X:%2X:%2X\n", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
     BP32.setup(&InputManager::onConnectedController, &InputManager::onDisconnectedController);
     BP32.forgetBluetoothKeys();
+    Serial.println("InputManager: Bluepad32 ready, pairing keys cleared.");
+    scanI2CBus();
 
+    Serial.println("InputManager: initializing LPS barometer...");
     if (!ps.init())
     {
+        Serial.println("InputManager: LPS barometer init failed.");
         callError(LPS_ERROR);
     }
     ps.enableDefault();
+    Serial.println("InputManager: LPS barometer ready.");
 
-    if (!icm.begin_I2C())
+    Serial.println("InputManager: initializing ICM-20948...");
+    bool imuReady = false;
+    const uint8_t imuAddresses[] = {MPU_ADDR, MPU_ADDR_ALT};
+    for (int attempt = 0; attempt < 5 && !imuReady; attempt++)
     {
+        for (uint8_t address : imuAddresses)
+        {
+            Serial.printf("InputManager: ICM-20948 init attempt %d at 0x%02X...\n", attempt + 1, address);
+            if (icm.begin_I2C(address, &Wire))
+            {
+                Serial.printf("InputManager: ICM-20948 ready at 0x%02X.\n", address);
+                imuReady = true;
+                break;
+            }
+            delay(100);
+        }
+        delay(250);
+    }
+
+    if (!imuReady)
+    {
+        Serial.println("InputManager: ICM-20948 init failed.");
         callError(IMU_ERROR);
     }
+
+    Serial.println("InputManager: attaching ESC outputs...");
     m1.setPeriodHertz(50);
     m2.setPeriodHertz(50);
     m3.setPeriodHertz(50);
@@ -38,8 +90,10 @@ InputManager::InputManager()
     m4.attach(MOTOR4PIN, 1000, 2000);
 
     setMotors({1000, 1000, 1000, 1000});
+    Serial.println("InputManager: motors idle at 1000us.");
 
     delay(3000);
+    Serial.println("InputManager: complete.");
 }
 
 InputManager::~InputManager()
@@ -51,7 +105,7 @@ void InputManager::onConnectedController(ControllerPtr ctl)
 
     if (controller == nullptr)
     {
-        Serial.printf("CALLBACK: Controller is connected, index=%d\n");
+        Serial.printf("CALLBACK: Controller is connected, index=%d\n", ctl->index());
         // Additionally, you can get certain gamepad properties like:
         // Model, VID, PID, BTAddr, flags, etc.
         ControllerProperties properties = ctl->getProperties();
@@ -65,7 +119,7 @@ void InputManager::onDisconnectedController(ControllerPtr ctl)
 {
     if (controller == ctl)
     {
-        Serial.printf("CALLBACK: Controller disconnected from index=%d\n");
+        Serial.printf("CALLBACK: Controller disconnected from index=%d\n", ctl->index());
         controller = nullptr;
     }
 }
@@ -149,6 +203,16 @@ void InputManager::processGamepad(ControllerPtr ctl)
     // dumpGamepad(ctl);
 }
 
+void InputManager::updateControllers()
+{
+    BP32.update();
+}
+
+bool InputManager::isControllerConnected() const
+{
+    return controller != nullptr && controller->isConnected();
+}
+
 float InputManager::getAltitude()
 {
     float pressure = ps.readPressureMillibars();
@@ -172,9 +236,14 @@ float InputManager::getTemperatureICM()
 
 Control InputManager::getController()
 {
+    if (!isControllerConnected())
+    {
+        return {0, 0, 0, 0, 0.0f, 0.0f, 0.0f};
+    }
+
     Control c = {controller->a(), controller->b(), controller->r1(), controller->l1(),
-                 controller->r2(), controller->l2(),
-                 controller->axisRY()};
+                 controller->throttle() / 1023.0f, controller->brake() / 1023.0f,
+                 controller->axisRY() / 512.0f};
     return c;
 }
 
@@ -185,6 +254,9 @@ Orientation InputManager::getOrientation()
 
 Orientation InputManager::sensorFusion()
 {
+    updateICM();
+    orientation.altitude = getAltitude();
+
     unsigned long currentTime = micros();
 
     if (previousFusionTime == 0)
@@ -271,4 +343,45 @@ void InputManager::updateICM()
                   mag.magnetic.x, mag.magnetic.y, mag.magnetic.z,
                   temp.temperature};
     icm_struct = newicm;
+}
+
+Orientation InputManager::getGoal()
+{
+    static Orientation goal = {};
+
+    if (!isControllerConnected())
+    {
+        goal.altitude = 0.0f;
+        return goal;
+    }
+
+    Control c = getController();
+    float climb = constrain(c.r2 - c.l2, -1.0f, 1.0f);
+    float pitchCommand = constrain(-c.ry, -1.0f, 1.0f);
+    float yawCommand = 0.0f;
+
+    if (c.r1)
+    {
+        yawCommand += 1.0f;
+    }
+    if (c.l1)
+    {
+        yawCommand -= 1.0f;
+    }
+
+    goal.pitch = pitchCommand * 25.0f;
+    goal.roll = 0.0f;
+    goal.yaw += yawCommand * 2.0f;
+    goal.altitude = constrain(climb, 0.0f, 1.0f);
+
+    if (goal.yaw > 180.0f)
+    {
+        goal.yaw -= 360.0f;
+    }
+    else if (goal.yaw < -180.0f)
+    {
+        goal.yaw += 360.0f;
+    }
+
+    return goal;
 }
