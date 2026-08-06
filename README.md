@@ -1,4 +1,4 @@
-# Astra Revision 5.5
+# Astra Firmware v0.1.0
 
 Flightcontroller firmware for a custom ESP32S3-N8R8 embedded board, ICM-20948, LPS25HBTR. PCB Gerber files are also within this repo and are easily reproducable.
 
