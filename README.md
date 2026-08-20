@@ -2,6 +2,10 @@
 
 Flightcontroller firmware for a custom ESP32S3-N8R8 embedded board, ICM-20948, LPS25HBTR. PCB Gerber files are also within this repo and are easily reproducable.
 
+<p align="center">
+  <img src="photos/pcbimage.jpeg" width="650">
+</p>
+
 # Hardware
 
 * ESP32-S3 Module
@@ -13,6 +17,14 @@ Flightcontroller firmware for a custom ESP32S3-N8R8 embedded board, ICM-20948, L
 * Couple Resistors, Capacitors, Buttons and 2.54mm Pin Headers
 * Usb-C 2.0 Port
 
+### PCB Layout
+
+<p align="center">
+  <img src="photos/pcblayout.png" width="700">
+</p>
+
+Rev 5.5 PCB layout designed in KiCad for the ESP32-S3, IMU, barometer, power regulation, USB-C, and debug/status circuitry.
+
 ---
 
 # Software
@@ -20,6 +32,12 @@ Flightcontroller firmware for a custom ESP32S3-N8R8 embedded board, ICM-20948, L
 * C++
 * FreeRTOS 
 * PlatformIO + Visual Studio Code
+
+### Firmware Architecture
+
+<p align="center">
+  <img src="photos/Arch.jpg" width="700">
+</p>
 
 
 # Project Structure
