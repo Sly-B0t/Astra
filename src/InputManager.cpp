@@ -11,38 +11,12 @@
 
 LPS InputManager::ps;
 Adafruit_ICM20948 InputManager::icm;
-ControllerPtr InputManager::controller = nullptr;
-
-namespace
-{
-void scanI2CBus()
-{
-    Serial.println("I2C scan: starting.");
-    int found = 0;
-    for (uint8_t address = 1; address < 127; address++)
-    {
-        Wire.beginTransmission(address);
-        if (Wire.endTransmission() == 0)
-        {
-            Serial.printf("I2C scan: found device at 0x%02X\n", address);
-            found++;
-        }
-        delay(2);
-    }
-    Serial.printf("I2C scan: complete, found %d device(s).\n", found);
-}
-}
 
 InputManager::InputManager()
 {
     Serial.println("InputManager: begin.");
     Serial.printf("Firmware: %s\n", BP32.firmwareVersion());
-    const uint8_t *addr = BP32.localBdAddress();
-    Serial.printf("BD Addr: %2X:%2X:%2X:%2X:%2X:%2X\n", addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
-    BP32.setup(&InputManager::onConnectedController, &InputManager::onDisconnectedController);
-    BP32.forgetBluetoothKeys();
-    Serial.println("InputManager: Bluepad32 ready, pairing keys cleared.");
-    scanI2CBus();
+    Serial.println("InputManager: Bluepad32 ready, pairing keys cleared. Put controller in pairing mode.");
 
     Serial.println("InputManager: initializing LPS barometer...");
     if (!ps.init())
@@ -100,119 +74,6 @@ InputManager::~InputManager()
 {
 }
 
-void InputManager::onConnectedController(ControllerPtr ctl)
-{
-
-    if (controller == nullptr)
-    {
-        Serial.printf("CALLBACK: Controller is connected, index=%d\n", ctl->index());
-        // Additionally, you can get certain gamepad properties like:
-        // Model, VID, PID, BTAddr, flags, etc.
-        ControllerProperties properties = ctl->getProperties();
-        Serial.printf("Controller model: %s, VID=0x%04x, PID=0x%04x\n", ctl->getModelName().c_str(), properties.vendor_id,
-                      properties.product_id);
-        controller = ctl;
-    }
-}
-
-void InputManager::onDisconnectedController(ControllerPtr ctl)
-{
-    if (controller == ctl)
-    {
-        Serial.printf("CALLBACK: Controller disconnected from index=%d\n", ctl->index());
-        controller = nullptr;
-    }
-}
-
-void InputManager::dumpGamepad(ControllerPtr ctl)
-{
-    Serial.printf(
-        "idx=%d, dpad: 0x%02x, buttons: 0x%04x, axis L: %4d, %4d, axis R: %4d, %4d, brake: %4d, throttle: %4d, "
-        "misc: 0x%02x, gyro x:%6d y:%6d z:%6d, accel x:%6d y:%6d z:%6d\n",
-        ctl->index(),       // Controller Index
-        ctl->dpad(),        // D-pad
-        ctl->buttons(),     // bitmask of pressed buttons
-        ctl->axisX(),       // (-511 - 512) left X Axis
-        ctl->axisY(),       // (-511 - 512) left Y axis
-        ctl->axisRX(),      // (-511 - 512) right X axis
-        ctl->axisRY(),      // (-511 - 512) right Y axis
-        ctl->brake(),       // (0 - 1023): brake button
-        ctl->throttle(),    // (0 - 1023): throttle (AKA gas) button
-        ctl->miscButtons(), // bitmask of pressed "misc" buttons
-        ctl->gyroX(),       // Gyro X
-        ctl->gyroY(),       // Gyro Y
-        ctl->gyroZ(),       // Gyro Z
-        ctl->accelX(),      // Accelerometer X
-        ctl->accelY(),      // Accelerometer Y
-        ctl->accelZ()       // Accelerometer Z
-    );
-}
-
-void InputManager::processGamepad(ControllerPtr ctl)
-{
-    // There are different ways to query whether a button is pressed.
-    // By query each button individually:
-    //  a(), b(), x(), y(), l1(), etc...
-    if (ctl->a())
-    {
-        static int colorIdx = 0;
-        // Some gamepads like DS4 and DualSense support changing the color LED.
-        // It is possible to change it by calling:
-        switch (colorIdx % 3)
-        {
-        case 0:
-            // Red
-            ctl->setColorLED(255, 0, 0);
-            break;
-        case 1:
-            // Green
-            ctl->setColorLED(0, 255, 0);
-            break;
-        case 2:
-            // Blue
-            ctl->setColorLED(0, 0, 255);
-            break;
-        }
-        colorIdx++;
-    }
-
-    if (ctl->b())
-    {
-        // Turn on the 4 LED. Each bit represents one LED.
-        static int led = 0;
-        led++;
-        // Some gamepads like the DS3, DualSense, Nintendo Wii, Nintendo Switch
-        // support changing the "Player LEDs": those 4 LEDs that usually indicate
-        // the "gamepad seat".
-        // It is possible to change them by calling:
-        ctl->setPlayerLEDs(led & 0x0f);
-    }
-
-    if (ctl->x())
-    {
-        // Some gamepads like DS3, DS4, DualSense, Switch, Xbox One S, Stadia support rumble.
-        // It is possible to set it by calling:
-        // Some controllers have two motors: "strong motor", "weak motor".
-        // It is possible to control them independently.
-        ctl->playDualRumble(0 /* delayedStartMs */, 250 /* durationMs */, 0x80 /* weakMagnitude */,
-                            0x40 /* strongMagnitude */);
-    }
-
-    // Another way to query controller data is by getting the buttons() function.
-    // See how the different "dump*" functions dump the Controller info.
-    // dumpGamepad(ctl);
-}
-
-void InputManager::updateControllers()
-{
-    BP32.update();
-}
-
-bool InputManager::isControllerConnected() const
-{
-    return controller != nullptr && controller->isConnected();
-}
-
 float InputManager::getAltitude()
 {
     float pressure = ps.readPressureMillibars();
@@ -232,19 +93,6 @@ float InputManager::getTemperatureICM()
 {
     updateICM();
     return icm_struct.temp;
-}
-
-Control InputManager::getController()
-{
-    if (!isControllerConnected())
-    {
-        return {0, 0, 0, 0, 0.0f, 0.0f, 0.0f};
-    }
-
-    Control c = {controller->a(), controller->b(), controller->r1(), controller->l1(),
-                 controller->throttle() / 1023.0f, controller->brake() / 1023.0f,
-                 controller->axisRY() / 512.0f};
-    return c;
 }
 
 Orientation InputManager::getOrientation()
@@ -347,41 +195,4 @@ void InputManager::updateICM()
 
 Orientation InputManager::getGoal()
 {
-    static Orientation goal = {};
-
-    if (!isControllerConnected())
-    {
-        goal.altitude = 0.0f;
-        return goal;
-    }
-
-    Control c = getController();
-    float climb = constrain(c.r2 - c.l2, -1.0f, 1.0f);
-    float pitchCommand = constrain(-c.ry, -1.0f, 1.0f);
-    float yawCommand = 0.0f;
-
-    if (c.r1)
-    {
-        yawCommand += 1.0f;
-    }
-    if (c.l1)
-    {
-        yawCommand -= 1.0f;
-    }
-
-    goal.pitch = pitchCommand * 25.0f;
-    goal.roll = 0.0f;
-    goal.yaw += yawCommand * 2.0f;
-    goal.altitude = constrain(climb, 0.0f, 1.0f);
-
-    if (goal.yaw > 180.0f)
-    {
-        goal.yaw -= 360.0f;
-    }
-    else if (goal.yaw < -180.0f)
-    {
-        goal.yaw += 360.0f;
-    }
-
-    return goal;
 }

@@ -5,7 +5,6 @@
 #include <Adafruit_ICM20948.h>
 #include <Adafruit_Sensor.h>
 #include <Wire.h>
-#include <Bluepad32.h>
 #include <Helpers.h>
 #include <ESP32Servo.h>
 
@@ -14,7 +13,6 @@ class InputManager
 private:
     static LPS ps;
     static Adafruit_ICM20948 icm;
-    static ControllerPtr controller;
     ICM icm_struct = {};
     Orientation orientation = {};
     unsigned long previousFusionTime = 0;
@@ -29,17 +27,10 @@ private:
 public:
     InputManager();
     ~InputManager();
-    static void onConnectedController(ControllerPtr ctl);
-    static void onDisconnectedController(ControllerPtr ctl);
-    void dumpGamepad(ControllerPtr ctl);
-    void processGamepad(ControllerPtr ctl);
-    void updateControllers();
-    bool isControllerConnected() const;
     float getAltitude();
     float getAverageTemperature();
     float getTemperatureBar();
     float getTemperatureICM();
-    Control getController();
     Orientation getOrientation();
     Orientation sensorFusion();
     void setMotor(float speed, Servo motor);

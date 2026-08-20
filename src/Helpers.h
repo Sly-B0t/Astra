@@ -47,11 +47,13 @@ struct PIDData
 #define LED_18 18
 #define LED_ACTIVE_LEVEL HIGH
 
-#define STATUS_PRINT_INTERVAL_MS 1000
+#define STATUS_PRINT_INTERVAL_MS 5000
+#define CLEAR_BT_KEYS_ON_BOOT 0
 
 #define LPS_ERROR 1
 #define IMU_ERROR 2
 #define I2C_ERROR 3
+#define FIRMWAREVER "1.0.0"
 
 inline void setStatusLed(bool on)
 {
@@ -62,7 +64,9 @@ inline void setStatusLed(bool on)
 inline void blinkStatusLed(unsigned int onMs, unsigned int offMs)
 {
     setStatusLed(true);
+    Serial.print(".");
     delay(onMs);
+    Serial.print(".");
     setStatusLed(false);
     delay(offMs);
 }

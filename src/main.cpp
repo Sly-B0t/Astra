@@ -22,17 +22,9 @@ void setup()
 {
     Serial.begin(115200);
     delay(300);
-    Serial.println();
-    Serial.println("=== Astra startup ===");
-    Serial.printf("Board pins: SDA GPIO%d SCL GPIO%d M1 GPIO%d M2 GPIO%d M3 GPIO%d M4 GPIO%d LED GPIO%d\n",
-                  SERIALDATAPIN,
-                  SERIALCLOCKPIN,
-                  MOTOR1PIN,
-                  MOTOR2PIN,
-                  MOTOR3PIN,
-                  MOTOR4PIN,
-                  LED_18);
-    Serial.println("Startup LED code 1: serial is alive, starting I2C.");
+    String firmwareversion = FIRMWAREVER;
+    Serial.println("Astra Revision" + firmwareversion + "starting...");
+    Serial.println("Starting I2C.");
     blinkStartupCode(1);
     Wire.begin(SERIALDATAPIN, SERIALCLOCKPIN);
     Wire.setClock(400000);
