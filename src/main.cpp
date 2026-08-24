@@ -1,4 +1,3 @@
-#include <Bluepad32.h>
 #include <Arduino.h>
 #include <ESP32Servo.h>
 #include <Wire.h>
@@ -17,6 +16,8 @@ volatile bool armed = false;
 void IOCore(void *parameter);
 void PIDCore(void *parameter);
 void LEDCore(void *parameter);
+
+uint8_t CONTROLLER_MAC[] = {0xA4, 0xCB, 0x8F, 0x20, 0x55, 0xD8};
 
 void setup()
 {
@@ -64,145 +65,10 @@ void loop()
 
 void IOCore(void *parameter)
 {
-    PIDData newData;
-    Motors idleSpeed = {1000, 1000, 1000, 1000};
-    Motors currentSpeed = idleSpeed;
-    Motors newSpeed;
-    bool previousArmButton = false;
-    bool previousDisarmButton = false;
-    bool previousConnected = false;
-    unsigned long lastStatusPrintMs = 0;
-
-    while (true)
-    {
-        IM->updateControllers();
-        bool connected = IM->isControllerConnected();
-        Control controls = IM->getController();
-        bool armPressed = connected && controls.a;
-        bool disarmPressed = connected && controls.b;
-
-        if (connected != previousConnected)
-        {
-            Serial.println(connected ? "IO: controller connected." : "IO: controller not connected.");
-            previousConnected = connected;
-        }
-
-        if (!connected && armed)
-        {
-            armed = false;
-            xQueueReset(pidQueue);
-            xQueueReset(motorQueue);
-            currentSpeed = idleSpeed;
-            IM->setMotors(idleSpeed);
-            Serial.println("DISARMED: controller disconnected.");
-        }
-
-        if (armPressed && !previousArmButton && !armed && controls.r2 < 0.05f && controls.l2 < 0.05f)
-        {
-            xQueueReset(pidQueue);
-            xQueueReset(motorQueue);
-            armed = true;
-            Serial.println("ARMED.");
-        }
-
-        if (disarmPressed && !previousDisarmButton && armed)
-        {
-            armed = false;
-            xQueueReset(pidQueue);
-            xQueueReset(motorQueue);
-            currentSpeed = idleSpeed;
-            IM->setMotors(idleSpeed);
-            Serial.println("DISARMED.");
-        }
-
-        // Get fresh values before sending them.
-        newData.actual = IM->getOrientation();
-        newData.goal = armed ? IM->getGoal() : Orientation{};
-
-        if (armed)
-        {
-            // Send the newest sensor/controller data to the PID core.
-            xQueueOverwrite(pidQueue, &newData);
-        }
-        else
-        {
-            currentSpeed = idleSpeed;
-        }
-
-        // Check whether the PID core produced new motor speeds.
-        // A timeout of 0 means do not wait.
-        if (xQueueReceive(motorQueue, &newSpeed, 0) == pdTRUE)
-        {
-            currentSpeed = armed ? newSpeed : idleSpeed;
-        }
-
-        // Apply either the new speeds or the previous valid speeds.
-        IM->setMotors(currentSpeed);
-
-        unsigned long now = millis();
-        if (now - lastStatusPrintMs >= STATUS_PRINT_INTERVAL_MS)
-        {
-            lastStatusPrintMs = now;
-            Serial.printf("STATUS armed=%d connected=%d goal[p=%.1f r=%.1f y=%.1f thr=%.2f] actual[p=%.1f r=%.1f y=%.1f alt=%.2f] motors[%.0f %.0f %.0f %.0f]\n",
-                          armed,
-                          connected,
-                          newData.goal.pitch,
-                          newData.goal.roll,
-                          newData.goal.yaw,
-                          newData.goal.altitude,
-                          newData.actual.pitch,
-                          newData.actual.roll,
-                          newData.actual.yaw,
-                          newData.actual.altitude,
-                          currentSpeed.m1,
-                          currentSpeed.m2,
-                          currentSpeed.m3,
-                          currentSpeed.m4);
-        }
-
-        previousArmButton = armPressed;
-        previousDisarmButton = disarmPressed;
-
-        vTaskDelay(pdMS_TO_TICKS(5));
-    }
 }
 
 void PIDCore(void *parameter)
 {
-    PIDData receivedData;
-    Motors calculatedSpeed;
-    unsigned long lastPidPrintMs = 0;
-
-    while (true)
-    {
-        if (xQueueReceive(pidQueue, &receivedData, portMAX_DELAY) == pdTRUE)
-        {
-            pid.setOrientation(receivedData.goal, receivedData.actual);
-            pid.updatePID();
-            calculatedSpeed = pid.getMotorThrust();
-            // Replace any uncollected result with the newest result.
-            xQueueOverwrite(motorQueue, &calculatedSpeed);
-
-            unsigned long now = millis();
-            if (now - lastPidPrintMs >= STATUS_PRINT_INTERVAL_MS)
-            {
-                lastPidPrintMs = now;
-                Serial.printf("PID: goal[p=%.1f r=%.1f y=%.1f a=%.2f] actual[p=%.1f r=%.1f y=%.1f a=%.2f] out[%.0f %.0f %.0f %.0f]\n",
-                              receivedData.goal.pitch,
-                              receivedData.goal.roll,
-                              receivedData.goal.yaw,
-                              receivedData.goal.altitude,
-                              receivedData.actual.pitch,
-                              receivedData.actual.roll,
-                              receivedData.actual.yaw,
-                              receivedData.actual.altitude,
-                              calculatedSpeed.m1,
-                              calculatedSpeed.m2,
-                              calculatedSpeed.m3,
-                              calculatedSpeed.m4);
-            }
-        }
-    }
 }
 
 void LEDCore(void *parameter)

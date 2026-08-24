@@ -4,7 +4,6 @@
 #include <Adafruit_ICM20948.h>
 #include <Adafruit_Sensor.h>
 #include <Wire.h>
-#include <Bluepad32.h>
 #include <InputManager.h>
 #include <Helpers.h>
 #include <ESP32Servo.h>
@@ -15,8 +14,6 @@ Adafruit_ICM20948 InputManager::icm;
 InputManager::InputManager()
 {
     Serial.println("InputManager: begin.");
-    Serial.printf("Firmware: %s\n", BP32.firmwareVersion());
-    Serial.println("InputManager: Bluepad32 ready, pairing keys cleared. Put controller in pairing mode.");
 
     Serial.println("InputManager: initializing LPS barometer...");
     if (!ps.init())

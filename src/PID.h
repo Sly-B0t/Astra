@@ -38,13 +38,6 @@ private:
     static constexpr float altitudeCorrectionLimitUs = 250.0f;
     static constexpr float integralLimit = 120.0f;
 
-    float runAxisPID(float error, float dt, const PIDGains &gains, PIDState &state, float outputLimit);
-    float shortestAngleError(float target, float current);
-    float getCollectiveThrottle(float dt);
-    void writeMixedMotors(float collectiveUs, float rollCorrection, float pitchCorrection, float yawCorrection);
-    void writeIdle();
-    float clampMotor(float value);
-
 public:
     PID();
     ~PID();
